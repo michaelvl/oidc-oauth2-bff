@@ -6,7 +6,7 @@ This repository contain a a prototype of the single-page-application
 
 This work in inspired by:
 
-- https://datatracker.ietf.org/doc/html/draft-parecki-oauth-browser-based-apps
+- https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps-08
 - https://datatracker.ietf.org/doc/draft-bertocci-oauth2-tmi-bff/
 - https://curity.io/resources/learn/the-bff-pattern/
 
