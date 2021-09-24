@@ -151,7 +151,9 @@ app.post('/continue', (req, res) => {
         }
         console.log('req.body', req.body);
         console.log('req.session', req.session);
-        return res.status(200).json({loggedIn: false});
+
+        let isLoggedIn = !! req.session.id_token_claims
+        return res.status(200).json({loggedIn: isLoggedIn});
     }
 
 });
