@@ -1,0 +1,47 @@
+name: Build and push container image
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+    tags:
+      - v*
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: michaelvl/oidc-oauth2-bff
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v1
+        with:
+         registry: ${{ env.REGISTRY }}
+         username: ${{ secrets.DOCKERHUB_USERNAME }}
+         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
