@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
 const redis = require('redis')
 //const https = require('https');
@@ -53,38 +54,16 @@ if (redis_url) {
 }
 app.use(session(session_config));
 
+function onProxyReq(proxyReq, req, res) {
+    proxyReq.setHeader('authorization', 'Bearer '+req.session.access_token);
+}
 
-app.all('/api/*', (req, res) => {
-    let path = req.url.substr(5);
-    api_url = upstream_url + path;
-    console.log('API '+req.method+' request to url '+api_url);
-    if (req.session.access_token) {
-	const data = req.body || null;
-        const options = {
-            method: req.method,
-            headers: { ...req.headers,
-                       'authorization': 'Bearer '+req.session.access_token
-                     }
-        };
-        const upstream = https.request(api_url, options, (upstream_resp) => {
-            if (upstream_resp.statusCode != 200) {
-                console.log('statusCode:', upstream_resp.statusCode);
-                res.status(500).send();
-            } else {
-                upstream_resp.on('data', (data) => {
-		    res.status(200).send(data);
-		});
-                upstream_resp.on('end', () => {
-		    res.status(200).end();
-		});
-	    }
-        });
-	if (data) {
-            upstream.write(data);
-	}
-	upstream.end();
-    }
-});
+app.use('/api', createProxyMiddleware({
+    target: upstream_url,
+    changeOrigin: true,
+    pathRewrite: {'^/api' : ''},
+    onProxyReq: onProxyReq
+}));
 
 app.listen(port, () => {
     console.log(`API-GW listening on port ${port}!`);
