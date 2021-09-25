@@ -191,7 +191,7 @@ app.get('/logout', (req, res) => {
     url = oidc_logout_url;
     if (req.session.id_token) {
 	url += '?id_token_hint='+req.session.id_token;
-	url += '&post_logout_redirect_uri='+redir_url;
+	url += '&post_logout_redirect_uri='+redirect_url;
     }
     req.session.id_token = null;
     req.session.access_token = null;
