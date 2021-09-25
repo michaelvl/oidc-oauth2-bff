@@ -7,26 +7,33 @@
 <body>
   <div class="ui container">
     <div class="header"><b>Browser-based Client (SPA)</b></div>
-    <div id="loginState"></div>
-    <div>
+    <h2>Store Objects</h2>
+
+    <p><b><div id="loginState"></div></b></p>
+
+    <div class='row'>
       <button id='doLogin'>Login</button>
-    </div>
-    <div>
       <button id='doLogout'>Logout</button>
-    </div>
-    <div>
       <button id='doGetUserInfo'>Get User Info</button>
     </div>
-    <div id="userInfo"></div>
-    <div>
-      <button id='doAPIWrite'>Create Object</button>
+    <p>This is the userinfo we received:</p>
+    <div class="framed verbatim"><p>
+        <div id="userInfo"></div>
+      </p>
     </div>
-    <div>
-      <input type='text' placeholder='Object data' id='objectData'>
-    </div>
-    <div>
+
+    <p>Use the following to create new objects through the API Gateway</p>
+    <p>
+      <div class='row'>
+        <input type='text' placeholder='Object data' id='objectData'>
+        <button id='doAPIWrite'>Create Object</button>
+      </div>
+    </p>
+
+    <p>Use the following to retreive a list of all object IDs from the API Gateway</p>
+    <p>
       <button id='doAPIListObjects'>List Objects</button>
-    </div>
+    </p>
     <div id="objectList"></div>
   </div>
   <link rel="stylesheet" type="text/css" href="style.css">

@@ -54,7 +54,7 @@ const doBFFContinue = async (pageUrl) => {
     data = await doBFFRequest('POST', '/continue', {pageUrl});
     console.log('Continue data', data);
     if (data && 'loggedIn' in data && data['loggedIn']) {
-	$('#loginState').html('Logged in');
+	$('#loginState').html('Logged in (click "Get User Info" for more user data)');
 	//$('#loginState').html('Logged in as'+data['sub']);
     } else {
 	$('#loginState').html('Not logged in');
@@ -65,7 +65,7 @@ const doBFFGetUserInfo = async () => {
     data = await doBFFRequest('GET', '/userinfo', null);
     console.log('Userinfo data', data);
     if ('preferred_username' in data) {
-	$('#loginState').html('Logged in as '+data['preferred_username']);
+	$('#loginState').html('Logged in as <b>'+data['preferred_username']+'</b>');
 	$('#userInfo').html(JSON.stringify(data));
 	//$('#loginState').html('Logged in as'+data['sub']);
     } else {

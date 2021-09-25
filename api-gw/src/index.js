@@ -3,8 +3,6 @@ const session = require('express-session');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
 const redis = require('redis')
-//const https = require('https');
-const https = require('http');
 const logger = require('morgan');
 
 const port = process.env.CLIENT_PORT || 5020;
