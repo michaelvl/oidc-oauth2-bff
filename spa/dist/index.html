@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simple Bubble SPA</title>
+</head>
+<body>
+  <div class="ui container">
+    <div class="header"><b>Browser-based Client (SPA)</b></div>
+    <div id="loginState"></div>
+    <div>
+      <button id='doLogin'>Login</button>
+    </div>
+    <div>
+      <button id='doLogout'>Logout</button>
+    </div>
+    <div>
+      <button id='doGetUserInfo'>Get User Info</button>
+    </div>
+    <div id="userInfo"></div>
+    <div>
+      <button id='doAPIWrite'>Create Object</button>
+    </div>
+    <div>
+      <input type='text' placeholder='Object data' id='objectData'>
+    </div>
+    <div>
+      <button id='doAPIListObjects'>List Objects</button>
+    </div>
+    <div id="objectList"></div>
+  </div>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

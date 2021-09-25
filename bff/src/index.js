@@ -9,27 +9,32 @@ const urlParse = require("url-parse");
 //const https = require('https');
 const https = require('http');
 const jwt_decode = require('jwt-decode');
+const logger = require('morgan');
 
-const port = process.env.CLIENT_PORT || 5000;
-const redir_url = process.env.REDIR_URL;
+const port = process.env.CLIENT_PORT || 5010;
+const redirect_url = process.env.REDIRECT_URL;
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 const oidc_auth_url = process.env.OIDC_AUTH_URL;
 const oidc_token_url = process.env.OIDC_TOKEN_URL;
+const oidc_logout_url = process.env.OIDC_LOGOUT_URL;
 const oidc_scope = process.env.OIDC_SCOPE || 'openid profile';
 const redis_url = process.env.REDIS_URL;
-const session_secret = process.env.SESSION_SECRET || randomstring.generate(32);
+const session_secret = process.env.SESSION_SECRET;
 const cors_allow_origin = process.env.CORS_ALLOW_ORIGIN;
 
 console.log('CLIENT_ID', client_id);
 console.log('CLIENT_SECRET', client_secret);
+console.log('REDIRECT_URL', redirect_url);
 console.log('OIDC_AUTH_URL', oidc_auth_url);
 console.log('OIDC_TOKEN_URL', oidc_token_url);
+console.log('OIDC_LOGOUT_URL', oidc_logout_url);
 console.log('OIDC_SCOPE', oidc_scope);
 console.log('REDIS_URL', redis_url);
 console.log('CORS_ALLOW_ORIGIN', cors_allow_origin);
 
 const app = express();
+app.use(logger('combined'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -75,7 +80,7 @@ app.get('/start', (req, res) => {
         response_type: 'code',
         client_id: client_id,
         scope: oidc_scope,
-        redirect_uri: redir_url,
+        redirect_uri: redirect_url,
         state: state,
         nonce: nonce
     });
@@ -86,8 +91,6 @@ app.get('/start', (req, res) => {
 });
 
 app.post('/continue', (req, res) => {
-    console.log('POST', req.originalUrl)
-
     let pageUrl = req.body.pageUrl
     let data = urlParse(pageUrl, true).query;
     let code = data.code
@@ -100,7 +103,7 @@ app.post('/continue', (req, res) => {
         const data = querystring.encode({
             code: code,
             grant_type: 'authorization_code',
-            redirect_uri: redir_url});
+            redirect_uri: redirect_url});
         const options = {
             method: 'POST',
             headers: {
@@ -141,7 +144,7 @@ app.post('/continue', (req, res) => {
             }
         });
         post.write(data);
-        post.end();
+	post.end();
     } else {
         if (!code) {
             console.log('Error, code missing.');
@@ -152,15 +155,14 @@ app.post('/continue', (req, res) => {
         console.log('req.body', req.body);
         console.log('req.session', req.session);
 
-        let isLoggedIn = !! req.session.id_token_claims
+        let isLoggedIn = !! req.session.id_token;
         return res.status(200).json({loggedIn: isLoggedIn});
     }
 
 });
 
 app.get('/userinfo', (req, res) => {
-    console.log('GET', req.originalUrl)
-    if (req.session.id_token_claims) {
+    if (req.session.id_token) {
         console.log('ID token claims', req.session.id_token_claims);
         res.status(200).json(req.session.id_token_claims);
     } else {
@@ -169,6 +171,18 @@ app.get('/userinfo', (req, res) => {
     }
 });
 
+app.get('/logout', (req, res) => {
+    url = oidc_logout_url;
+    if (req.session.id_token) {
+	url += '?id_token_hint='+req.session.id_token;
+	url += '&post_logout_redirect_uri='+redir_url;
+    }
+    req.session.id_token = null;
+    req.session.access_token = null;
+    req.session.refresh_token = null;
+    res.status(200).json({logoutUrl: url});
+});
+
 app.listen(port, () => {
-    console.log(`Client listening on port ${port}!`);
+    console.log(`BFF listening on port ${port}!`);
 });
