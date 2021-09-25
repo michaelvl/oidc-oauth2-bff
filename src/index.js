@@ -10,6 +10,7 @@ const urlParse = require("url-parse");
 const https = require('http');
 const jwt_decode = require('jwt-decode');
 const logger = require('morgan');
+const crypto = require('crypto');
 
 const port = process.env.CLIENT_PORT || 5010;
 const redirect_url = process.env.REDIRECT_URL;
@@ -72,9 +73,20 @@ if (redis_url) {
 }
 app.use(session(session_config));
 
+function base64URLEncode(str) {
+    return str.toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+}
+
 app.get('/start', (req, res) => {
+    // State, nonce and PKCE provide protection against CSRF in various forms. See:
+    // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
     let state = Buffer.from(randomstring.generate(24)).toString('base64');
     let nonce = Buffer.from(randomstring.generate(24)).toString('base64');
+    let pkce_verifier = Buffer.from(randomstring.generate(84)).toString('base64');
+    let pkce_challenge = base64URLEncode(crypto.createHash('sha256').update(pkce_verifier).digest());
 
     let url = oidc_auth_url + '?' + querystring.encode({
         response_type: 'code',
@@ -82,11 +94,14 @@ app.get('/start', (req, res) => {
         scope: oidc_scope,
         redirect_uri: redirect_url,
         state: state,
-        nonce: nonce
+        nonce: nonce,
+	code_challenge: pkce_challenge,
+	code_challenge_method: 'S256'
     });
     console.log('Return authRedirUrl:', url);
     req.session.state = state
     req.session.nonce = nonce
+    req.session.pkce_verifier = pkce_verifier
     res.status(200).json({authRedirUrl: url});
 });
 
@@ -103,7 +118,8 @@ app.post('/continue', (req, res) => {
         const data = querystring.encode({
             code: code,
             grant_type: 'authorization_code',
-            redirect_uri: redirect_url});
+            redirect_uri: redirect_url,
+	    code_verifier: req.session.pkce_verifier});
         const options = {
             method: 'POST',
             headers: {

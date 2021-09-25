@@ -10,6 +10,7 @@ This work in inspired by:
 - https://datatracker.ietf.org/doc/draft-bertocci-oauth2-tmi-bff/
 - https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-03
 - https://curity.io/resources/learn/the-bff-pattern/
+- https://datatracker.ietf.org/doc/html/rfc7636
 
 Tests are built using the Identity Provider from:
 
