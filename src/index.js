@@ -105,7 +105,7 @@ app.get('/start', (req, res) => {
     res.status(200).json({authRedirUrl: url});
 });
 
-app.post('/continue', (req, res) => {
+app.post('/pageload', (req, res) => {
     let pageUrl = req.body.pageUrl
     let data = urlParse(pageUrl, true).query;
     let code = data.code
@@ -155,7 +155,7 @@ app.post('/continue', (req, res) => {
                         req.session.refresh_token = token_data.refresh_token
                         console.log('Refresh token', req.session.refresh_token);
                     }
-                    res.status(200).json({loggedIn: true});
+                    res.status(200).json({loggedIn: true, handledAuth: true});
                 });
             }
         });
@@ -172,7 +172,7 @@ app.post('/continue', (req, res) => {
         console.log('req.session', req.session);
 
         let isLoggedIn = !! req.session.id_token;
-        return res.status(200).json({loggedIn: isLoggedIn});
+        return res.status(200).json({loggedIn: isLoggedIn, handledAuth: false});
     }
 
 });
