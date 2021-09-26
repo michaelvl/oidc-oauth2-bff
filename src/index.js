@@ -150,6 +150,11 @@ app.post('/pageload', (req, res) => {
                     if (token_data.access_token) {
                         req.session.access_token = token_data.access_token
                         console.log('Access token', req.session.access_token);
+			if (token_data.expires_in) {
+                            req.session.expires_in = token_data.expires_in
+                            req.session.expires_timestamp = Date.now() + req.session.expires_in/1000;
+                            console.log('Access token expiry_in', req.session.expires_in);
+			}
                     }               
                     if (token_data.refresh_token) {
                         req.session.refresh_token = token_data.refresh_token
