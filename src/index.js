@@ -133,7 +133,7 @@ app.post('/pageload', (req, res) => {
         const post = https.request(oidc_token_url, options, (post_resp) => {
             if (post_resp.statusCode != 200) {
                 console.log('statusCode:', post_resp.statusCode);
-                res.status(500).send();
+                res.status(post_resp.statusCode).send();
             } else {
                 post_resp.on('data', (data) => {
                     const token_data = JSON.parse(data);
