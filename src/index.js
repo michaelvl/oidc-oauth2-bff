@@ -105,6 +105,34 @@ app.get('/start', (req, res) => {
     res.status(200).json({authRedirUrl: url});
 });
 
+function parseTokenData(req, data) {
+    const token_data = JSON.parse(data);
+    console.log('Token response', token_data);
+    if (token_data.id_token) {
+        req.session.id_token =  token_data.id_token;
+        console.log('ID token', req.session.id_token);
+
+        // TODO: Validate ID token
+	// See Section 3.1.3.7 of https://openid.net/specs/openid-connect-core-1_0.html
+
+        req.session.id_token_claims = jwt_decode(req.session.id_token);
+        console.log('ID token claims', req.session.id_token_claims);
+    }
+    if (token_data.access_token) {
+        req.session.access_token = token_data.access_token
+        console.log('Access token', req.session.access_token);
+	if (token_data.expires_in) {
+            req.session.expires_in = token_data.expires_in
+            req.session.expires_timestamp = Date.now() + req.session.expires_in*1000;
+            console.log('Access token expiry_in', req.session.expires_in);
+	}
+    }
+    if (token_data.refresh_token) {
+        req.session.refresh_token = token_data.refresh_token
+        console.log('Refresh token', req.session.refresh_token);
+    }
+}
+
 app.post('/pageload', (req, res) => {
     let pageUrl = req.body.pageUrl
     let data = urlParse(pageUrl, true).query;
@@ -136,31 +164,10 @@ app.post('/pageload', (req, res) => {
                 res.status(post_resp.statusCode).send();
             } else {
                 post_resp.on('data', (data) => {
-                    const token_data = JSON.parse(data);
-                    console.log('Token response', token_data);
-                    if (token_data.id_token) {
-                        req.session.id_token =  token_data.id_token;
-                        console.log('ID token', req.session.id_token);
-
-                        // TODO: Validate signature on id_token
-
-                        req.session.id_token_claims = jwt_decode(req.session.id_token);
-                        console.log('ID token claims', req.session.id_token_claims);
-                    }
-                    if (token_data.access_token) {
-                        req.session.access_token = token_data.access_token
-                        console.log('Access token', req.session.access_token);
-			if (token_data.expires_in) {
-                            req.session.expires_in = token_data.expires_in
-                            req.session.expires_timestamp = Date.now() + req.session.expires_in/1000;
-                            console.log('Access token expiry_in', req.session.expires_in);
-			}
-                    }               
-                    if (token_data.refresh_token) {
-                        req.session.refresh_token = token_data.refresh_token
-                        console.log('Refresh token', req.session.refresh_token);
-                    }
-                    res.status(200).json({loggedIn: true, handledAuth: true});
+		    parseTokenData(req, data);
+                    res.status(200).json({loggedIn: true,
+					  expiresIn: Math.floor((req.session.expires_timestamp - Date.now())/1000),
+					  handledAuth: true});
                 });
             }
         });
@@ -177,7 +184,9 @@ app.post('/pageload', (req, res) => {
         console.log('req.session', req.session);
 
         let isLoggedIn = !! req.session.id_token;
-        return res.status(200).json({loggedIn: isLoggedIn, handledAuth: false});
+        return res.status(200).json({loggedIn: isLoggedIn,
+				     expiresIn: Math.floor((req.session.expires_timestamp - Date.now())/1000),
+				     handledAuth: false});
     }
 
 });
@@ -202,6 +211,46 @@ app.get('/logout', (req, res) => {
     req.session.access_token = null;
     req.session.refresh_token = null;
     res.status(200).json({logoutUrl: url});
+});
+
+app.post('/refresh', (req, res) => {
+    if (req.session.refresh_token) {
+
+        console.log('Refreshing tokens, access_token expires_in', Math.floor(Date.now()-req.session.expires_timestamp));
+        // This is a confidential client - authorize towards IdP with client id and secret
+        const client_creds = 'Basic ' + Buffer.from(querystring.escape(client_id)+':'+querystring.escape(client_secret), 'ascii').toString('base64')
+        const data = querystring.encode({
+            grant_type: 'refresh_token',
+            refresh_token: req.session.refresh_token});
+        const options = {
+            method: 'POST',
+            headers: {
+                'Authorization': client_creds,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': data.length
+            }
+        };
+
+        // Exchange code for tokens using the token endpoint
+        const post = https.request(oidc_token_url, options, (post_resp) => {
+            if (post_resp.statusCode != 200) {
+                console.log('statusCode:', post_resp.statusCode);
+                res.status(post_resp.statusCode).send();
+            } else {
+                post_resp.on('data', (data) => {
+		    parseTokenData(req, data);
+                    res.status(200).json({loggedIn: true,
+					  expiresIn: Math.floor((req.session.expires_timestamp - Date.now())/1000),
+					  refreshOk: true});
+                });
+            }
+        });
+        post.write(data);
+	post.end();
+    } else {
+	res.status(200).json({loggedIn: false,
+			      refreshOk: false});
+    }
 });
 
 app.listen(port, () => {
