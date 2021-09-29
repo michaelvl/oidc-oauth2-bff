@@ -1,24 +1,17 @@
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const redis = require('redis')
 const randomstring = require("randomstring");
-const querystring = require("querystring");
 const urlParse = require("url-parse");
-//const https = require('https');
-const https = require('http');
-const jwt_decode = require('jwt-decode');
 const logger = require('morgan');
-const crypto = require('crypto');
+const { Issuer, generators, TokenSet } = require('openid-client');
 
 const port = process.env.CLIENT_PORT || 5010;
 const redirect_url = process.env.REDIRECT_URL;
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
-const oidc_auth_url = process.env.OIDC_AUTH_URL;
-const oidc_token_url = process.env.OIDC_TOKEN_URL;
-const oidc_logout_url = process.env.OIDC_LOGOUT_URL;
+const oidc_issuer_url = process.env.OIDC_ISSUER_URL;
 const oidc_scope = process.env.OIDC_SCOPE || 'openid profile';
 const redis_url = process.env.REDIS_URL;
 const session_secret = process.env.SESSION_SECRET;
@@ -27,9 +20,7 @@ const cors_allow_origin = process.env.CORS_ALLOW_ORIGIN;
 console.log('CLIENT_ID', client_id);
 console.log('CLIENT_SECRET', client_secret);
 console.log('REDIRECT_URL', redirect_url);
-console.log('OIDC_AUTH_URL', oidc_auth_url);
-console.log('OIDC_TOKEN_URL', oidc_token_url);
-console.log('OIDC_LOGOUT_URL', oidc_logout_url);
+console.log('OIDC_ISSUER_URL', oidc_issuer_url);
 console.log('OIDC_SCOPE', oidc_scope);
 console.log('REDIS_URL', redis_url);
 console.log('CORS_ALLOW_ORIGIN', cors_allow_origin);
@@ -37,7 +28,6 @@ console.log('CORS_ALLOW_ORIGIN', cors_allow_origin);
 const app = express();
 app.use(logger('combined'));
 app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 if (cors_allow_origin) {
     app.use(cors({
@@ -73,185 +63,124 @@ if (redis_url) {
 }
 app.use(session(session_config));
 
-function base64URLEncode(str) {
-    return str.toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
+function storeTokens(session, tokenSet) {
+    console.log('Received and validated tokens %j', tokenSet);
+    console.log('Validated ID Token claims', tokenSet.claims());
+    session.id_token = tokenSet.id_token
+    session.id_token_claims = tokenSet.claims();
+    session.access_token = tokenSet.access_token;
+    session.refresh_token = tokenSet.refresh_token;
+    session.expires_at = tokenSet.expires_at;
 }
 
-app.get('/start', (req, res) => {
-    // State, nonce and PKCE provide protection against CSRF in various forms. See:
-    // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
-    let state = Buffer.from(randomstring.generate(24)).toString('base64');
-    let nonce = Buffer.from(randomstring.generate(24)).toString('base64');
-    let pkce_verifier = Buffer.from(randomstring.generate(84)).toString('base64');
-    let pkce_challenge = base64URLEncode(crypto.createHash('sha256').update(pkce_verifier).digest());
+function tokensValid(session) {
+    const expire_in = session.expires_at - Date.now()/1000;
+    console.log('Tokens expire in', expire_in);
+    return session.id_token && expire_in > 0;
+}
 
-    let url = oidc_auth_url + '?' + querystring.encode({
-        response_type: 'code',
-        client_id: client_id,
-        scope: oidc_scope,
-        redirect_uri: redirect_url,
-        state: state,
-        nonce: nonce,
-	code_challenge: pkce_challenge,
-	code_challenge_method: 'S256'
+Issuer.discover(oidc_issuer_url)
+    .then(function (issuer) {
+	console.log('Discovered issuer %s %O', issuer.issuer, issuer.metadata);
+
+        // Client settings for authorization code flow
+        const client = new issuer.Client({
+            client_id: client_id,
+            client_secret: client_secret,
+            usePKCE: true,  // Use authorization code flow with PKCE as standardized by OAuth2.1
+            redirect_uris: [redirect_url],
+            response_types: ['code'],
+            token_endpoint_auth_method: 'client_secret_basic' // Send auth in header
+        });
+
+	app.post('/start', (req, res) => {
+	    // State, nonce and PKCE provide protection against CSRF in various forms. See:
+	    // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
+	    const state = Buffer.from(randomstring.generate(24)).toString('base64');
+	    const nonce = Buffer.from(randomstring.generate(24)).toString('base64');
+	    const pkce_verifier = generators.codeVerifier();
+	    const pkce_challenge = generators.codeChallenge(pkce_verifier);
+	    const auth_url = client.authorizationUrl({
+		scope: oidc_scope,
+		code_challenge: pkce_challenge,
+		code_challenge_method: 'S256',
+		state, nonce
+	    });
+	    console.log('Return authRedirUrl:', auth_url);
+	    req.session.pkce_verifier = pkce_verifier
+	    req.session.state = state
+	    req.session.nonce = nonce
+	    res.status(200).json({authRedirUrl: auth_url});
+	});
+
+	app.post('/pageload', (req, res) => {
+	    const pageUrl = req.body.pageUrl
+	    console.log('pageload url', pageUrl);
+	    const data = urlParse(pageUrl, true).query;
+	    if (data.code && data.state && req.session.state) {
+		const params = client.callbackParams(pageUrl);
+		console.log('pageload params', params);
+		try {
+		    client.callback(redirect_url, params, { code_verifier: req.session.pkce_verifier,
+							    state: req.session.state,
+							    nonce: req.session.nonce })
+			.then((tokenSet) => {
+			    storeTokens(req.session, tokenSet);
+			    res.status(200).json({loggedIn: true,
+						  handledAuth: true});
+			});
+		} catch (error) {
+		    console.log('Error finishing login:', error);
+		    res.status(200).json({loggedIn: false,
+					  handledAuth: false});
+		    req.session.destroy()
+		}
+	    } else {
+		res.status(200).json({loggedIn: !!req.session.id_token,
+				      handledAuth: false});
+	    }
+	});
+
+	app.get('/userinfo', (req, res) => {
+	    if (tokensValid(req.session)) {
+		console.log('ID token claims', req.session.id_token_claims);
+		res.status(200).json(req.session.id_token_claims);
+	    } else {
+		console.log('*** Tokens expired');
+		res.status(200).json({});
+	    }
+	});
+
+	app.post('/logout', (req, res) => {
+	    if (req.session.id_token) {
+		url = client.endSessionUrl({
+		    id_token_hint: req.session.id_token,
+		    post_logout_redirect_uri: redirect_url
+		})
+		res.status(200).json({logoutUrl: url});
+	    } else {
+		console.log('*** No ID token claims');
+		res.status(200).json({});
+	    }
+	    req.session.destroy()
+	});
+
+	app.post('/refresh', (req, res) => {
+	    if (req.session.refresh_token) {
+		console.log('Refreshing tokens, access_token expires_at', req.session.expires_at);
+		client.refresh(req.session.refresh_token)
+		    .then((tokenSet) => {
+			  storeTokens(req.session, tokenSet);
+			res.status(200).json({expiresAt: req.session.expires_at,
+					      loggedIn: true,
+					      refreshOk: true});
+		    });
+	    } else {
+		res.status(200).json({loggedIn: false,
+				      refreshOk: false});
+	    }
+	});
     });
-    console.log('Return authRedirUrl:', url);
-    req.session.state = state
-    req.session.nonce = nonce
-    req.session.pkce_verifier = pkce_verifier
-    res.status(200).json({authRedirUrl: url});
-});
-
-function parseTokenData(req, data) {
-    const token_data = JSON.parse(data);
-    console.log('Token response', token_data);
-    if (token_data.id_token) {
-        req.session.id_token =  token_data.id_token;
-        console.log('ID token', req.session.id_token);
-
-        // TODO: Validate ID token
-	// See Section 3.1.3.7 of https://openid.net/specs/openid-connect-core-1_0.html
-
-        req.session.id_token_claims = jwt_decode(req.session.id_token);
-        console.log('ID token claims', req.session.id_token_claims);
-    }
-    if (token_data.access_token) {
-        req.session.access_token = token_data.access_token
-        console.log('Access token', req.session.access_token);
-	if (token_data.expires_in) {
-            req.session.expires_in = token_data.expires_in
-            req.session.expires_timestamp = Date.now() + req.session.expires_in*1000;
-            console.log('Access token expiry_in', req.session.expires_in);
-	}
-    }
-    if (token_data.refresh_token) {
-        req.session.refresh_token = token_data.refresh_token
-        console.log('Refresh token', req.session.refresh_token);
-    }
-}
-
-app.post('/pageload', (req, res) => {
-    let pageUrl = req.body.pageUrl
-    let data = urlParse(pageUrl, true).query;
-    let code = data.code
-    let idp_state = data.state
-
-    if (code && req.session.state == idp_state) {
-        console.log('Login continuation using code', code, 'and state', idp_state);
-        // This is a confidential client - authorize towards IdP with client id and secret
-        const client_creds = 'Basic ' + Buffer.from(querystring.escape(client_id)+':'+querystring.escape(client_secret), 'ascii').toString('base64')
-        const data = querystring.encode({
-            code: code,
-            grant_type: 'authorization_code',
-            redirect_uri: redirect_url,
-	    code_verifier: req.session.pkce_verifier});
-        const options = {
-            method: 'POST',
-            headers: {
-                'Authorization': client_creds,
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Content-Length': data.length
-            }
-        };
-
-        // Exchange code for tokens using the token endpoint
-        const post = https.request(oidc_token_url, options, (post_resp) => {
-            if (post_resp.statusCode != 200) {
-                console.log('statusCode:', post_resp.statusCode);
-                res.status(post_resp.statusCode).send();
-            } else {
-                post_resp.on('data', (data) => {
-		    parseTokenData(req, data);
-                    res.status(200).json({loggedIn: true,
-					  expiresIn: Math.floor((req.session.expires_timestamp - Date.now())/1000),
-					  handledAuth: true});
-                });
-            }
-        });
-        post.write(data);
-	post.end();
-    } else {
-        if (!code) {
-            console.log('Error, code missing.');
-        }
-        if (req.session.state != idp_state) {
-            console.log('Error, state mismatch.', req.session.state, 'vs', idp_state);
-        }
-        console.log('req.body', req.body);
-        console.log('req.session', req.session);
-
-        let isLoggedIn = !! req.session.id_token;
-        return res.status(200).json({loggedIn: isLoggedIn,
-				     expiresIn: Math.floor((req.session.expires_timestamp - Date.now())/1000),
-				     handledAuth: false});
-    }
-
-});
-
-app.get('/userinfo', (req, res) => {
-    if (req.session.id_token) {
-        console.log('ID token claims', req.session.id_token_claims);
-        res.status(200).json(req.session.id_token_claims);
-    } else {
-        console.log('*** No ID token claims');
-        res.status(200).json({});
-    }
-});
-
-app.get('/logout', (req, res) => {
-    url = oidc_logout_url;
-    if (req.session.id_token) {
-	url += '?id_token_hint='+req.session.id_token;
-	url += '&post_logout_redirect_uri='+redirect_url;
-    }
-    req.session.id_token = null;
-    req.session.access_token = null;
-    req.session.refresh_token = null;
-    res.status(200).json({logoutUrl: url});
-});
-
-app.post('/refresh', (req, res) => {
-    if (req.session.refresh_token) {
-
-        console.log('Refreshing tokens, access_token expires_in', Math.floor(Date.now()-req.session.expires_timestamp));
-        // This is a confidential client - authorize towards IdP with client id and secret
-        const client_creds = 'Basic ' + Buffer.from(querystring.escape(client_id)+':'+querystring.escape(client_secret), 'ascii').toString('base64')
-        const data = querystring.encode({
-            grant_type: 'refresh_token',
-            refresh_token: req.session.refresh_token});
-        const options = {
-            method: 'POST',
-            headers: {
-                'Authorization': client_creds,
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Content-Length': data.length
-            }
-        };
-
-        // Exchange code for tokens using the token endpoint
-        const post = https.request(oidc_token_url, options, (post_resp) => {
-            if (post_resp.statusCode != 200) {
-                console.log('statusCode:', post_resp.statusCode);
-                res.status(post_resp.statusCode).send();
-            } else {
-                post_resp.on('data', (data) => {
-		    parseTokenData(req, data);
-                    res.status(200).json({loggedIn: true,
-					  expiresIn: Math.floor((req.session.expires_timestamp - Date.now())/1000),
-					  refreshOk: true});
-                });
-            }
-        });
-        post.write(data);
-	post.end();
-    } else {
-	res.status(200).json({loggedIn: false,
-			      refreshOk: false});
-    }
-});
 
 app.listen(port, () => {
     console.log(`BFF listening on port ${port}!`);
