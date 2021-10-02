@@ -120,21 +120,19 @@ Issuer.discover(oidc_issuer_url)
 	    if (data.code && data.state && req.session.state) {
 		const params = client.callbackParams(pageUrl);
 		console.log('pageload params', params);
-		try {
-		    client.callback(redirect_url, params, { code_verifier: req.session.pkce_verifier,
-							    state: req.session.state,
-							    nonce: req.session.nonce })
-			.then((tokenSet) => {
-			    storeTokens(req.session, tokenSet);
-			    res.status(200).json({loggedIn: true,
-						  handledAuth: true});
-			});
-		} catch (error) {
-		    console.log('Error finishing login:', error);
-		    res.status(200).json({loggedIn: false,
-					  handledAuth: false});
-		    req.session.destroy()
-		}
+		client.callback(redirect_url, params, { code_verifier: req.session.pkce_verifier,
+							state: req.session.state,
+							nonce: req.session.nonce })
+		    .then((tokenSet) => {
+			storeTokens(req.session, tokenSet);
+			res.status(200).json({loggedIn: true,
+					      handledAuth: true});
+		    }).catch ((error) => {
+			console.log('Error finishing login:', error);
+			res.status(200).json({loggedIn: false,
+					      handledAuth: false});
+			req.session.destroy()
+		    });
 	    } else {
 		res.status(200).json({loggedIn: !!req.session.id_token,
 				      handledAuth: false});
