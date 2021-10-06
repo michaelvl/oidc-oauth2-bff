@@ -81,7 +81,7 @@ function tokensValid(session) {
 
 Issuer.discover(oidc_issuer_url)
     .then(function (issuer) {
-	console.log('Discovered issuer %s %O', issuer.issuer, issuer.metadata);
+        console.log('Discovered issuer %s %O', issuer.issuer, issuer.metadata);
 
         // Client settings for authorization code flow
         const client = new issuer.Client({
@@ -93,91 +93,96 @@ Issuer.discover(oidc_issuer_url)
             token_endpoint_auth_method: 'client_secret_basic' // Send auth in header
         });
 
-	app.post('/start', (req, res) => {
-	    // State, nonce and PKCE provide protection against CSRF in various forms. See:
-	    // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
-	    const state = Buffer.from(randomstring.generate(24)).toString('base64');
-	    const nonce = Buffer.from(randomstring.generate(24)).toString('base64');
-	    const pkce_verifier = generators.codeVerifier();
-	    const pkce_challenge = generators.codeChallenge(pkce_verifier);
-	    const auth_url = client.authorizationUrl({
-		scope: oidc_scope,
-		code_challenge: pkce_challenge,
-		code_challenge_method: 'S256',
-		state, nonce
-	    });
-	    console.log('Return authRedirUrl:', auth_url);
-	    req.session.pkce_verifier = pkce_verifier
-	    req.session.state = state
-	    req.session.nonce = nonce
-	    res.status(200).json({authRedirUrl: auth_url});
-	});
+        app.post('/start', (req, res) => {
+            // State, nonce and PKCE provide protection against CSRF in various forms. See:
+            // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
+            const state = Buffer.from(randomstring.generate(24)).toString('base64');
+            const nonce = Buffer.from(randomstring.generate(24)).toString('base64');
+            const pkce_verifier = generators.codeVerifier();
+            const pkce_challenge = generators.codeChallenge(pkce_verifier);
+            const auth_url = client.authorizationUrl({
+                scope: oidc_scope,
+                code_challenge: pkce_challenge,
+                code_challenge_method: 'S256',
+                state, nonce
+            });
+            console.log('Return authRedirUrl:', auth_url);
+            req.session.pkce_verifier = pkce_verifier
+            req.session.state = state
+            req.session.nonce = nonce
+            res.status(200).json({authRedirUrl: auth_url});
+        });
 
-	app.post('/pageload', (req, res) => {
-	    const pageUrl = req.body.pageUrl
-	    console.log('pageload url', pageUrl);
-	    const data = urlParse(pageUrl, true).query;
-	    if (data.code && data.state && req.session.state) {
-		const params = client.callbackParams(pageUrl);
-		console.log('pageload params', params);
-		client.callback(redirect_url, params, { code_verifier: req.session.pkce_verifier,
-							state: req.session.state,
-							nonce: req.session.nonce })
-		    .then((tokenSet) => {
-			storeTokens(req.session, tokenSet);
-			res.status(200).json({loggedIn: true,
-					      handledAuth: true});
-		    }).catch ((error) => {
-			console.log('Error finishing login:', error);
-			res.status(200).json({loggedIn: false,
-					      handledAuth: false});
-			req.session.destroy()
-		    });
-	    } else {
-		res.status(200).json({loggedIn: !!req.session.id_token,
-				      handledAuth: false});
-	    }
-	});
+        app.post('/pageload', (req, res) => {
+            const pageUrl = req.body.pageUrl
+            console.log('pageload url', pageUrl);
+            const data = urlParse(pageUrl, true).query;
+            if (data.code && data.state && req.session.state) {
+                const params = client.callbackParams(pageUrl);
+                console.log('pageload params', params);
+                client.callback(redirect_url, params, { code_verifier: req.session.pkce_verifier,
+                                                        state: req.session.state,
+                                                        nonce: req.session.nonce })
+                    .then((tokenSet) => {
+                        storeTokens(req.session, tokenSet);
+                        res.status(200).json({loggedIn: true,
+                                              handledAuth: true});
+                    }).catch ((error) => {
+                        console.log('Error finishing login:', error);
+                        res.status(200).json({loggedIn: false,
+                                              handledAuth: false});
+                        req.session.destroy()
+                    });
+            } else {
+                res.status(200).json({loggedIn: !!req.session.id_token,
+                                      handledAuth: false});
+            }
+        });
 
-	app.get('/userinfo', (req, res) => {
-	    if (tokensValid(req.session)) {
-		console.log('ID token claims', req.session.id_token_claims);
-		res.status(200).json(req.session.id_token_claims);
-	    } else {
-		console.log('*** Tokens expired');
-		res.status(200).json({});
-	    }
-	});
+        app.get('/userinfo', (req, res) => {
+            if (tokensValid(req.session)) {
+                console.log('ID token claims', req.session.id_token_claims);
+                res.status(200).json(req.session.id_token_claims);
+            } else {
+                console.log('*** Tokens expired');
+                res.status(200).json({});
+            }
+        });
 
-	app.post('/logout', (req, res) => {
-	    if (req.session.id_token) {
-		url = client.endSessionUrl({
-		    id_token_hint: req.session.id_token,
-		    post_logout_redirect_uri: redirect_url
-		})
-		res.status(200).json({logoutUrl: url});
-	    } else {
-		console.log('*** No ID token claims');
-		res.status(200).json({});
-	    }
-	    req.session.destroy()
-	});
+        app.post('/logout', (req, res) => {
+            if (req.session.id_token) {
+                url = client.endSessionUrl({
+                    id_token_hint: req.session.id_token,
+                    post_logout_redirect_uri: redirect_url
+                })
+                res.status(200).json({logoutUrl: url});
+            } else {
+                console.log('*** No ID token claims');
+                res.status(200).json({});
+            }
+            req.session.destroy()
+        });
 
-	app.post('/refresh', (req, res) => {
-	    if (req.session.refresh_token) {
-		console.log('Refreshing tokens, access_token expires_at', req.session.expires_at);
-		client.refresh(req.session.refresh_token)
-		    .then((tokenSet) => {
-			  storeTokens(req.session, tokenSet);
-			res.status(200).json({expiresAt: req.session.expires_at,
-					      loggedIn: true,
-					      refreshOk: true});
-		    });
-	    } else {
-		res.status(200).json({loggedIn: false,
-				      refreshOk: false});
-	    }
-	});
+        app.post('/refresh', (req, res) => {
+            if (req.session.refresh_token) {
+                console.log('Refreshing tokens, access_token expires_at', req.session.expires_at);
+                client.refresh(req.session.refresh_token)
+                    .then((tokenSet) => {
+                          storeTokens(req.session, tokenSet);
+                        res.status(200).json({expiresAt: req.session.expires_at,
+                                              loggedIn: true,
+                                              refreshOk: true});
+                    }).catch ((error) => {
+                        console.log('Error refreshing tokens:', error);
+                        res.status(200).json({loggedIn: false,
+                                              handledAuth: false});
+                        req.session.destroy()
+                    });
+            } else {
+                res.status(200).json({loggedIn: false,
+                                      refreshOk: false});
+            }
+        });
     });
 
 app.listen(port, () => {
