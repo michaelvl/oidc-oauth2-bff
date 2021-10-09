@@ -9,4 +9,4 @@ RUN cd /apps/bff && npm install
 EXPOSE 5000
 
 WORKDIR /apps/bff
-CMD [ "npm", "start" ]
+CMD [ "node", "dist/index.js" ]
