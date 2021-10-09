@@ -144,7 +144,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
                         console.log('Error finishing login:', error);
                         res.status(200).json({loggedIn: false,
                                               handledAuth: false});
-                        req.session.destroy(null);
+                        req.session.destroy(() => {});
                     });
             } else {
                 res.status(200).json({loggedIn: !!req.session.id_token,
@@ -173,7 +173,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
                 console.log('*** No ID token claims');
                 res.status(200).json({});
             }
-            req.session.destroy(null);
+            req.session.destroy(() => {});
         });
 
         app.post('/refresh', (req, res) => {
@@ -189,7 +189,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
                         console.log('Error refreshing tokens:', error);
                         res.status(200).json({loggedIn: false,
                                               handledAuth: false});
-                        req.session.destroy(null);
+                        req.session.destroy(() => {});
                     });
             } else {
                 res.status(200).json({loggedIn: false,
