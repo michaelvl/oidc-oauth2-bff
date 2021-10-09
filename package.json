@@ -1,14 +1,14 @@
 {
     "name": "bff",
     "version": "1.0.0",
-    "description": "",
+    "description": "OIDC/OAuth2 backend-for-frontend for single-page-applications (SPAs)",
     "main": "index.ts",
     "scripts": {
-        "watch": "npm-watch",
         "build": "tsc",
         "prestart": "npm run build",
         "start": "node dist/index.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "watch": "ts-node-dev --respawn -- src/index.ts"
     },
     "author": "",
     "license": "ISC",
@@ -22,7 +22,7 @@
         "@types/redis": "^2.8.32",
         "@types/url-parse": "^1.4.4",
         "eslint": "^7.32.0",
-        "npm-watch": "^0.11.0",
+        "ts-node-dev": "^1.1.8",
         "typescript": "^4.4.3"
     },
     "dependencies": {
@@ -35,13 +35,5 @@
         "randomstring": "^1.2.1",
         "redis": "^3.1.2",
         "url-parse": "^1.5.3"
-    },
-    "watch": {
-        "start": {
-            "patterns": [
-                "src"
-            ],
-            "extensions": "ts"
-        }
     }
 }
