@@ -1,12 +1,15 @@
 FROM node:16.10.0-alpine3.12
 
-RUN mkdir -p /apps/bff
+ENV NODE_ENV production
 
-COPY dist /apps/bff/dist
-COPY src package.json package-lock.json /apps/bff/
-RUN cd /apps/bff && npm install
+RUN mkdir -p /usr/src/app/bff
+
+COPY --chown=node:node dist /usr/src/app/bff/dist
+COPY --chown=node:node src package.json package-lock.json /usr/src/app/bff/
+RUN cd /usr/src/app/bff && npm install --only=production
 
 EXPOSE 5000
 
-WORKDIR /apps/bff
+WORKDIR /usr/src/app/bff
+USER node
 CMD [ "node", "dist/index.js" ]
