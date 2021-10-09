@@ -1,11 +1,11 @@
-const express = require('express');
-const session = require('express-session');
-const cors = require('cors');
-const redis = require('redis')
-const randomstring = require("randomstring");
-const urlParse = require("url-parse");
-const logger = require('morgan');
-const { Issuer, generators, TokenSet } = require('openid-client');
+import express from 'express';
+import session from 'express-session';
+import cors from 'cors';
+import redis from 'redis';
+import randomstring from 'randomstring';
+import urlParse from 'url-parse';
+import logger from 'morgan';
+import oidcClient from 'openid-client';
 
 const port = process.env.CLIENT_PORT || 5010;
 const redirect_url = process.env.REDIRECT_URL;
@@ -36,7 +36,20 @@ if (cors_allow_origin) {
     }));
 }
 
-const session_config = { secret: session_secret,
+declare module 'express-session' {
+    interface SessionData {
+        id_token: string;
+        id_token_claims: object;
+        access_token: string;
+        refresh_token: string;
+        state: string;
+        nonce: string;
+        pkce_verifier: string;
+	expires_at: number;
+    }
+}
+
+const session_config : session.SessionOptions = { secret: session_secret,
                          resave: false,
                          saveUninitialized: false,
                          cookie: {
@@ -53,7 +66,7 @@ if (redis_url) {
     const RedisStore = require('connect-redis')(session)
     const redisClient = redis.createClient({ url: redis_url });
     redisClient.on('connect', () => { console.log('Redis connected'); });
-    redisClient.on('error', (err) => { console.log('Redis error', err); });
+    redisClient.on('error', (err: redis.RedisError) => { console.log('Redis error', err); });
     redisClient.on('reconnecting', () => { console.log('Redis reconnecting'); });
     session_config.store = new RedisStore({ client: redisClient,
                                             ttl: 60*60*12  // Seconds
@@ -63,7 +76,7 @@ if (redis_url) {
 }
 app.use(session(session_config));
 
-function storeTokens(session, tokenSet) {
+function storeTokens(session: session.Session & Partial<session.SessionData>, tokenSet: oidcClient.TokenSet) {
     console.log('Received and validated tokens %j', tokenSet);
     console.log('Validated ID Token claims', tokenSet.claims());
     session.id_token = tokenSet.id_token
@@ -73,13 +86,13 @@ function storeTokens(session, tokenSet) {
     session.expires_at = tokenSet.expires_at;
 }
 
-function tokensValid(session) {
+function tokensValid(session: session.Session & Partial<session.SessionData>) {
     const expire_in = session.expires_at - Date.now()/1000;
     console.log('Tokens expire in', expire_in);
     return session.id_token && expire_in > 0;
 }
 
-Issuer.discover(oidc_issuer_url)
+oidcClient.Issuer.discover(oidc_issuer_url)
     .then(function (issuer) {
         console.log('Discovered issuer %s %O', issuer.issuer, issuer.metadata);
 
@@ -98,8 +111,8 @@ Issuer.discover(oidc_issuer_url)
             // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
             const state = Buffer.from(randomstring.generate(24)).toString('base64');
             const nonce = Buffer.from(randomstring.generate(24)).toString('base64');
-            const pkce_verifier = generators.codeVerifier();
-            const pkce_challenge = generators.codeChallenge(pkce_verifier);
+            const pkce_verifier = oidcClient.generators.codeVerifier();
+            const pkce_challenge = oidcClient.generators.codeChallenge(pkce_verifier);
             const auth_url = client.authorizationUrl({
                 scope: oidc_scope,
                 code_challenge: pkce_challenge,
@@ -123,7 +136,7 @@ Issuer.discover(oidc_issuer_url)
                 client.callback(redirect_url, params, { code_verifier: req.session.pkce_verifier,
                                                         state: req.session.state,
                                                         nonce: req.session.nonce })
-                    .then((tokenSet) => {
+                    .then((tokenSet: oidcClient.TokenSet) => {
                         storeTokens(req.session, tokenSet);
                         res.status(200).json({loggedIn: true,
                                               handledAuth: true});
@@ -131,7 +144,7 @@ Issuer.discover(oidc_issuer_url)
                         console.log('Error finishing login:', error);
                         res.status(200).json({loggedIn: false,
                                               handledAuth: false});
-                        req.session.destroy()
+                        req.session.destroy(null);
                     });
             } else {
                 res.status(200).json({loggedIn: !!req.session.id_token,
@@ -151,7 +164,7 @@ Issuer.discover(oidc_issuer_url)
 
         app.post('/logout', (req, res) => {
             if (req.session.id_token) {
-                url = client.endSessionUrl({
+                const url = client.endSessionUrl({
                     id_token_hint: req.session.id_token,
                     post_logout_redirect_uri: redirect_url
                 })
@@ -160,7 +173,7 @@ Issuer.discover(oidc_issuer_url)
                 console.log('*** No ID token claims');
                 res.status(200).json({});
             }
-            req.session.destroy()
+            req.session.destroy(null);
         });
 
         app.post('/refresh', (req, res) => {
@@ -176,7 +189,7 @@ Issuer.discover(oidc_issuer_url)
                         console.log('Error refreshing tokens:', error);
                         res.status(200).json({loggedIn: false,
                                               handledAuth: false});
-                        req.session.destroy()
+                        req.session.destroy(null);
                     });
             } else {
                 res.status(200).json({loggedIn: false,
