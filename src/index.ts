@@ -6,6 +6,12 @@ import randomstring from 'randomstring';
 import urlParse from 'url-parse';
 import logger from 'morgan';
 import oidcClient from 'openid-client';
+import process from 'process';
+
+process.on('SIGINT', () => {
+  console.info("Interrupted")
+  process.exit(0)
+})
 
 const port = process.env.CLIENT_PORT || 5010;
 const redirect_url = process.env.REDIRECT_URL;
@@ -16,6 +22,7 @@ const oidc_scope = process.env.OIDC_SCOPE || 'openid profile';
 const redis_url = process.env.REDIS_URL;
 const session_secret = process.env.SESSION_SECRET;
 const cors_allow_origin = process.env.CORS_ALLOW_ORIGIN;
+const config_trust_proxies = process.env.CONFIG_TRUST_PROXIES || 1;
 
 console.log('CLIENT_ID', client_id);
 console.log('CLIENT_SECRET', client_secret);
@@ -58,7 +65,9 @@ const session_config : session.SessionOptions = { secret: session_secret,
                          }
                        };
 if (app.get('env') === 'production') {
-    app.set('trust proxy', 1)
+    console.log('Using trust proxy', config_trust_proxies);
+    app.set('trust proxy', config_trust_proxies)
+    console.log('Using secure cookie');
     session_config.cookie.secure = true
 }
 if (redis_url) {
