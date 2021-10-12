@@ -32,6 +32,19 @@ console.log('OIDC_SCOPE', oidc_scope);
 console.log('REDIS_URL', redis_url);
 console.log('CORS_ALLOW_ORIGIN', cors_allow_origin);
 
+if ( ! oidc_issuer_url) {
+   console.error('*** Env OIDC_ISSUER_URL not set');
+   process.exit(1);
+}
+if ( ! client_id || ! client_secret) {
+   console.error('*** Env CLIENT_ID or CLIENT_SECRET not set');
+   process.exit(1);
+}
+if ( ! redirect_url) {
+   console.error('*** Env REDIRECT_URL not set');
+   process.exit(1);
+}
+
 const app = express();
 app.use(logger('combined'));
 app.use(express.json());
