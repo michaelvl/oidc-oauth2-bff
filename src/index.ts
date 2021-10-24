@@ -23,6 +23,7 @@ const redis_url = process.env.REDIS_URL;
 const session_secret = process.env.SESSION_SECRET;
 const cors_allow_origin = process.env.CORS_ALLOW_ORIGIN;
 const config_trust_proxies = process.env.CONFIG_TRUST_PROXIES || 1;
+const base_path = process.env.BASE_PATH || '/';
 
 console.log('CLIENT_ID', client_id);
 console.log('CLIENT_SECRET', client_secret);
@@ -46,8 +47,10 @@ if ( ! redirect_url) {
 }
 
 const app = express();
-app.use(logger('combined'));
-app.use(express.json());
+const router = express.Router();
+app.use(base_path, router);
+router.use(logger('combined'));
+router.use(express.json());
 
 if (cors_allow_origin) {
     app.use(cors({
@@ -96,7 +99,7 @@ if (redis_url) {
 } else {
     console.log('Using Memory session store');
 }
-app.use(session(session_config));
+router.use(session(session_config));
 
 function storeTokens(session: session.Session & Partial<session.SessionData>, tokenSet: oidcClient.TokenSet) {
     console.log('Received and validated tokens %j', tokenSet);
@@ -128,7 +131,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
             token_endpoint_auth_method: 'client_secret_basic' // Send auth in header
         });
 
-        app.post('/start', (req, res) => {
+        router.post('/start', (req, res) => {
             // State, nonce and PKCE provide protection against CSRF in various forms. See:
             // https://danielfett.de/2020/05/16/pkce-vs-nonce-equivalent-or-not/
             const state = Buffer.from(randomstring.generate(24)).toString('base64');
@@ -148,7 +151,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
             res.status(200).json({authRedirUrl: auth_url});
         });
 
-        app.post('/pageload', (req, res) => {
+        router.post('/pageload', (req, res) => {
             const pageUrl = req.body.pageUrl
             console.log('pageload url', pageUrl);
             const data = urlParse(pageUrl, true).query;
@@ -174,7 +177,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
             }
         });
 
-        app.get('/userinfo', (req, res) => {
+        router.get('/userinfo', (req, res) => {
             if (tokensValid(req.session)) {
                 console.log('ID token claims', req.session.id_token_claims);
                 res.status(200).json(req.session.id_token_claims);
@@ -184,7 +187,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
             }
         });
 
-        app.post('/logout', (req, res) => {
+        router.post('/logout', (req, res) => {
             if (req.session.id_token) {
                 const url = client.endSessionUrl({
                     id_token_hint: req.session.id_token,
@@ -198,7 +201,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
             req.session.destroy(() => {});
         });
 
-        app.post('/refresh', (req, res) => {
+        router.post('/refresh', (req, res) => {
             if (req.session.refresh_token) {
                 console.log('Refreshing tokens, access_token expires_at', req.session.expires_at);
                 client.refresh(req.session.refresh_token)

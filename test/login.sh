@@ -2,7 +2,7 @@
 
 set -ex
 
-BFF_URL="localhost:5010"
+BFF_URL="localhost:5010/login"
 COOKIE_FILE="./cookies.txt"
 RESPONSE_FILE="./response.txt"
 USERNAME="user1"
