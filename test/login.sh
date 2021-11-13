@@ -10,9 +10,6 @@ USERNAME="user1"
 # Start login with BFF
 HTTP_STATUS=$(curl -X POST -is -c $COOKIE_FILE -H 'accept: application/json' $BFF_URL/start -o $RESPONSE_FILE -w '%{http_code}')
 
-cat $RESPONSE_FILE
-cat $COOKIE_FILE
-
 if [ "$HTTP_STATUS" != '200' ]; then
     echo "*** Failed login with HTTP code $HTTP_STATUS"
     exit 1
@@ -101,6 +98,79 @@ if [ "$SUB" != "$USERNAME" ]; then
 else
     echo "> Subject match"
 fi
+
+# Refresh tokens
+HTTP_STATUS=$(curl -is -X POST -b $COOKIE_FILE -c $COOKIE_FILE -H 'accept: application/json' $BFF_URL/refresh -o $RESPONSE_FILE -w '%{http_code}')
+if [ "$HTTP_STATUS" != '200' ]; then
+    echo "*** Failed reading userinfo with HTTP code $HTTP_STATUS"
+    exit 1
+else
+    echo "> Read userinfo OK with HTTP code $HTTP_STATUS"
+fi
+
+# Test response retreived from refresh
+tail -n1 $RESPONSE_FILE | jq .
+REFRESH_STATUS=$(tail -n1 $RESPONSE_FILE | jq -r .refreshOk)
+if [ "$REFRESH_STATUS" != "true" ]; then
+    echo "*** Incorrect refresh status $REFRESH_STATUS"
+    exit 1
+else
+    echo "> Refresh OK"
+fi
+
+# Logout
+HTTP_STATUS=$(curl -is -X POST -b $COOKIE_FILE -c $COOKIE_FILE -H 'accept: application/json' $BFF_URL/logout -o $RESPONSE_FILE -w '%{http_code}')
+if [ "$HTTP_STATUS" != '200' ]; then
+    echo "*** Failed reading userinfo with HTTP code $HTTP_STATUS"
+    exit 1
+else
+    echo "> Read userinfo OK with HTTP code $HTTP_STATUS"
+fi
+
+LOGOUT_URL=$(tail -n1 $RESPONSE_FILE | jq -r .logoutUrl)
+if [ "$LOGOUT_URL" == '' ]; then
+    echo "*** Got no logoutUrl"
+    exit 1
+else
+    echo "> Logout URL OK"
+fi
+
+
+
+
+# Continue logout with identity provider
+HTTP_STATUS=$(curl -is $LOGOUT_URL -o $RESPONSE_FILE -w '%{http_code}')
+if [ "$HTTP_STATUS" != '200' ]; then
+    echo "*** Failed IDP logout with HTTP code $HTTP_STATUS"
+    exit 1
+else
+    echo "> IDP logout start OK with HTTP code $HTTP_STATUS"
+fi
+
+# Complete logout
+grep -q '<h2>End Session</h2>' $RESPONSE_FILE
+
+SESSION_ID=$(grep sessionid $RESPONSE_FILE | sed -E 's/.*value=\"(.*)\".*/\1/')
+REDIR_URL=$(grep redirurl $RESPONSE_FILE | sed -E 's/.*value=\"(.*)\".*/\1/')
+
+HTTP_STATUS=$(curl -is -X POST -H "Content-Type: application/x-www-form-urlencoded" "http://localhost:5001/endsession-approve" -d "sessionid=$SESSION_ID&redirurl=$REDIR_URL" -o $RESPONSE_FILE -w '%{http_code}')
+if [ "$HTTP_STATUS" != '303' ]; then
+    echo "*** Failed IDP logout step with HTTP code $HTTP_STATUS"
+    exit 1
+else
+    echo "> IDP Logout OK with HTTP code $HTTP_STATUS"
+fi
+
+LOC=$(egrep '^Location' $RESPONSE_FILE | sed -E 's/^location: (.*)/\1/i')
+LOC="${LOC%%[[:cntrl:]]}"
+if [ "$LOC" != "$REDIR_URL" ]; then
+    echo "*** Failed IDP logout, bad location/redir URL: $LOC vs $REDIR_URL"
+    exit 1
+else
+    echo "> IDP post-logout Location OK"
+fi
+
+
 
 
 
