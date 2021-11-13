@@ -221,6 +221,9 @@ oidcClient.Issuer.discover(oidc_issuer_url)
                                       refreshOk: false});
             }
         });
+    }).catch((error) => {
+        console.log('Error during Identity Provider discovery:', error);
+        process.exit(1);
     });
 
 app.listen(port, () => {
