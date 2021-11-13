@@ -222,7 +222,7 @@ oidcClient.Issuer.discover(oidc_issuer_url)
             }
         });
     }).catch((error) => {
-        console.log('Error during Identity Provider discovery:', error);
+        console.log('Error during OIDC discovery:', error);
         process.exit(1);
     });
 
