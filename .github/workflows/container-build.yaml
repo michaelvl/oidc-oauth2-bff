@@ -9,6 +9,7 @@ on:
       - v*
     paths:
       - src/**
+      - .github/**
 
 env:
   REGISTRY: docker.io
