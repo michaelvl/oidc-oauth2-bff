@@ -2,9 +2,16 @@ name: CodeQL scanning
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/**
+    paths:
+      - src/**
   pull_request:
-    branches: [main]
+    branches:
+      - main
+    paths:
+      - src/**
   #schedule:
     #        ┌───────────── minute (0 - 59)
     #        │  ┌───────────── hour (0 - 23)
@@ -33,18 +40,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '14.18'
-      - run: npm install
-      - run: npm run build
-
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v1
-        # Override language selection by uncommenting this and choosing your languages
-        # with:
-        #   languages: go, javascript, csharp, python, cpp, java
+        with:
+          languages: javascript
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v1
