@@ -7,9 +7,9 @@ on:
       - feature/**
     tags:
       - v*
-    paths:
-      - src/**
-      - .github/**
+    paths-ignore:
+      - test/**
+      - README.md
 
 env:
   REGISTRY: docker.io
