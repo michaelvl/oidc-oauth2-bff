@@ -20,7 +20,7 @@ In summary, the security benefits of the OIDC BFF are:
   cookie, i.e. this is not available to potential malicious
   Javascript.
 
-A working example with single-page application and identity provider
+A **working demo** with single-page application and identity provider
 can be found in
 [michaelvl/oidc-bff-apigw-workshop](https://github.com/michaelvl/oidc-bff-apigw-workshop.git)
 
