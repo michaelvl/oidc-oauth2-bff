@@ -24,6 +24,7 @@ const session_secret = process.env.SESSION_SECRET;
 const cors_allow_origin = process.env.CORS_ALLOW_ORIGIN;
 const config_trust_proxies = process.env.CONFIG_TRUST_PROXIES || 1;
 const base_path = process.env.BASE_PATH || '/';
+const secure_cookie = process.env.SECURE_COOKIE!="false";
 
 console.log('CLIENT_ID', client_id);
 console.log('CLIENT_SECRET', client_secret);
@@ -32,6 +33,7 @@ console.log('OIDC_ISSUER_URL', oidc_issuer_url);
 console.log('OIDC_SCOPE', oidc_scope);
 console.log('REDIS_URL', redis_url);
 console.log('CORS_ALLOW_ORIGIN', cors_allow_origin);
+console.log('SECURE_COOKIE', secure_cookie);
 
 if ( ! oidc_issuer_url) {
    console.error('*** Env OIDC_ISSUER_URL not set');
@@ -84,7 +86,7 @@ if (app.get('env') === 'production') {
     console.log('Using trust proxy', config_trust_proxies);
     app.set('trust proxy', config_trust_proxies)
     console.log('Using secure cookie');
-    session_config.cookie.secure = true
+    session_config.cookie.secure = secure_cookie
 }
 if (redis_url) {
     console.log('Using Redis session store');

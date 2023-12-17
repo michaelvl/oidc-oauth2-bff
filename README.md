@@ -12,7 +12,18 @@ client secrets secret at the BFF while the frontend use
 [SameSite=strict](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite)
 cookies to track the security session.
 
+In summary, the security benefits of the OIDC BFF are:
+
+- OIDC tokens and client secrets are kept at the backend, which should
+  be more secure than the browser.
+
+- The security session between browser and BFF is a 'HTTP-only'
+  cookie, i.e. this is not available to potential malicious
+  Javascript.
+
 ## Overall Principle
+
+
 
 ## API Endpoints
 
