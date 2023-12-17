@@ -1,6 +1,5 @@
 # BFF for SPA Experiment
 
-
 This repository contain a a prototype of the OIDC backend for frontend pattern
 (BFF) for a single-page-application (SPA).
 
@@ -20,6 +19,10 @@ In summary, the security benefits of the OIDC BFF are:
 - The security session between browser and BFF is a 'HTTP-only'
   cookie, i.e. this is not available to potential malicious
   Javascript.
+
+A working example with single-page application and identity provider
+can be found in
+[michaelvl/oidc-bff-apigw-workshop](https://github.com/michaelvl/oidc-bff-apigw-workshop.git)
 
 ## Overall Principle
 
